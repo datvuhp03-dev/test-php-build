@@ -1,0 +1,97 @@
+name: DevStack PHP Raw Source Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      php_version:
+        description: 'PHP Version to compile (e.g., 8.3.4)'
+        required: true
+        default: '8.3.4'
+      release_tag:
+        description: 'Release Tag name (e.g., v8.3.4-native-linux)'
+        required: true
+        default: 'v8.3.4-native-linux'
+
+permissions:
+  contents: write
+
+jobs:
+  build-raw-php:
+    name: Compile Raw PHP ${{ github.event.inputs.php_version }} Source
+    # Dùng ubuntu-20.04 (hoặc cũ hơn) để tương thích glibc với các HDH Linux khác
+    runs-on: ubuntu-20.04
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Build Systems & Dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential autoconf libtool bison re2c \
+            pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev \
+            libssl-dev libonig-dev libzip-dev libgd-dev libjpeg-dev \
+            libpng-dev libfreetype6-dev libwebp-dev libmcrypt-dev \
+            libreadline-dev libtidy-dev libxslt1-dev
+
+      - name: Download PHP Source from php.net
+        run: |
+          wget https://www.php.net/distributions/php-${{ github.event.inputs.php_version }}.tar.gz
+          tar -zxvf php-${{ github.event.inputs.php_version }}.tar.gz
+          
+      - name: Configure and Compile PHP
+        run: |
+          cd php-${{ github.event.inputs.php_version }}
+          
+          # Cấu hình compile giống hệ thống Unix cổ điển (giống aaPanel)
+          ./configure \
+            --prefix=/opt/devstack/php \
+            --enable-fpm \
+            --with-fpm-user=www-data \
+            --with-fpm-group=www-data \
+            --enable-bcmath \
+            --enable-calendar \
+            --enable-exif \
+            --enable-ftp \
+            --enable-mbstring \
+            --enable-pcntl \
+            --enable-sockets \
+            --enable-soap \
+            --with-curl \
+            --with-openssl \
+            --with-zip \
+            --with-zlib \
+            --with-mysqli=mysqlnd \
+            --with-pdo-mysql=mysqlnd \
+            --with-pdo-sqlite \
+            --enable-gd \
+            --with-freetype \
+            --with-jpeg \
+            --with-webp
+
+          make -j$(nproc)
+          make install INSTALL_ROOT=$(pwd)/install_dir
+          
+      - name: Prepare DevStack Package
+        run: |
+          cd php-${{ github.event.inputs.php_version }}/install_dir/opt/devstack/php/
+          
+          # Tải php.ini-development gốc về
+          wget -qO lib/php.ini "https://raw.githubusercontent.com/php/php-src/PHP-${{ github.event.inputs.php_version }}/php.ini-development"
+          
+          # Nén toàn bộ kết quả đã được sắp xếp
+          tar -czvf /tmp/php-${{ github.event.inputs.php_version }}-native-linux-x64.tar.gz .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          name: DevStack Native PHP ${{ github.event.inputs.php_version }} (Linux x64)
+          body: "Compiled directly from PHP.net sources using ubuntu-20.04 (glibc compat) for DevStack Linux platform."
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/php-${{ github.event.inputs.php_version }}-native-linux-x64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
