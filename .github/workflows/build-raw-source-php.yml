@@ -36,7 +36,7 @@ jobs:
             pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev \
             libssl-dev libonig-dev libzip-dev libgd-dev libjpeg-dev \
             libpng-dev libfreetype6-dev libwebp-dev libmcrypt-dev \
-            libreadline-dev libtidy-dev libxslt1-dev
+            libreadline-dev libtidy-dev libxslt1-dev wget curl
 
       - name: Download PHP Source from php.net
         run: |
