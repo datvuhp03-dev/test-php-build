@@ -1,0 +1,73 @@
+name: DevStack PHP Release Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      php_version:
+        description: 'PHP Version (e.g., 8.2, 8.3)'
+        required: true
+        default: '8.3'
+      release_tag:
+        description: 'Release Tag name (e.g., v8.3.0-linux)'
+        required: true
+        default: 'v8.3.0-linux'
+
+# Cấp quyền Ghi để tự động tạo khung Release trên Github
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release PHP ${{ github.event.inputs.php_version }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download SPC (Static PHP CLI)
+        run: |
+          echo "Downloading spc core..."
+          wget -O spc.tgz "https://dl.static-php.dev/static-php-cli/spc-linux-x86_64.tar.gz"
+          tar -xvf spc.tgz
+          chmod +x spc
+
+      - name: Fetch PHP Source and Extensions
+        run: |
+          echo "Fetching sources for PHP ${{ github.event.inputs.php_version }}..."
+          # Bộ modules đầy đủ như Laragon, ddev, herd...
+          ./spc download --all --for-extensions="bcmath,bz2,calendar,ctype,curl,dom,exif,fileinfo,filter,gd,iconv,imagick,intl,mbstring,mysqli,mysqlnd,opcache,openssl,pcntl,pdo,pdo_mysql,pdo_sqlite,phar,posix,redis,session,simplexml,sodium,sockets,sqlite3,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib" --with-php=${{ github.event.inputs.php_version }}
+
+      - name: Compile Full-Option Static PHP & FPM
+        run: |
+          echo "Compiling heavily statically linked PHP..."
+          ./spc build --build-fpm --build-cli "bcmath,bz2,calendar,ctype,curl,dom,exif,fileinfo,filter,gd,iconv,imagick,intl,mbstring,mysqli,mysqlnd,opcache,openssl,pcntl,pdo,pdo_mysql,pdo_sqlite,phar,posix,redis,session,simplexml,sodium,sockets,sqlite3,swoole,tokenizer,xml,xmlreader,xmlwriter,zip,zlib" --with-php=${{ github.event.inputs.php_version }}
+
+      - name: Prepare DevStack Folder Structure
+        run: |
+          echo "Structuring payload..."
+          mkdir -p devstack-php/bin
+          mkdir -p devstack-php/sbin
+          
+          # Move Compiled Binaries
+          cp buildroot/bin/php devstack-php/bin/php
+          cp buildroot/bin/php-fpm devstack-php/sbin/php-fpm
+          
+          # Download official standard php.ini-development match with version
+          wget -qO devstack-php/php.ini "https://raw.githubusercontent.com/php/php-src/PHP-${{ github.event.inputs.php_version }}/php.ini-development"
+          
+          # Compress into tar.gz exactly from the ROOT of the folder so extraction in DevStack is seamless
+          tar -czvf php-${{ github.event.inputs.php_version }}-linux-x64.tar.gz -C devstack-php .
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          name: DevStack PHP ${{ github.event.inputs.php_version }} (Linux x64)
+          body: "Full pre-build Static PHP with standard modules + FPM for DevStack Linux platform."
+          draft: false
+          prerelease: false
+          files: |
+            php-${{ github.event.inputs.php_version }}-linux-x64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
