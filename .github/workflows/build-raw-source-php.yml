@@ -36,7 +36,7 @@ jobs:
             pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev \
             libssl-dev libonig-dev libzip-dev libgd-dev libjpeg-dev \
             libpng-dev libfreetype6-dev libwebp-dev libmcrypt-dev \
-            libreadline-dev libtidy-dev libxslt1-dev wget curl
+            libreadline-dev libtidy-dev libxslt1-dev wget curl patchelf
 
       - name: Download PHP Source from php.net
         run: |
@@ -79,10 +79,24 @@ jobs:
       - name: Prepare DevStack Package
         run: |
           cd php-${{ github.event.inputs.php_version }}/install_dir/opt/devstack/php/
+
+          # Bundle important shared libraries into lib/shared
+          mkdir -p lib/shared
           
+          # Extract all library paths from ldd that are NOT standard glibc or ld-linux
+          ldd bin/php sbin/php-fpm | grep "=> /" | awk '{print $3}' | sort -u | while read -r lib; do
+            if [[ "$lib" != *"/libc.so."* ]] && [[ "$lib" != *"/libdl.so."* ]] && [[ "$lib" != *"/libpthread.so."* ]] && [[ "$lib" != *"/libm.so."* ]] && [[ "$lib" != *"/ld-linux"* ]] && [[ "$lib" != *"/librt.so."* ]] && [[ "$lib" != *"/libgcc_s.so."* ]] && [[ "$lib" != *"/libresolv.so"* ]] && [[ "$lib" != *"/libnsl.so"* ]] && [[ "$lib" != *"/libutil.so"* ]]; then
+              cp "$lib" lib/shared/ || true
+            fi
+          done
+
+          # Patch RPATH so binaries know to look into lib/shared relative to their directory
+          patchelf --force-rpath --set-rpath '\$ORIGIN/../lib/shared' bin/php
+          patchelf --force-rpath --set-rpath '\$ORIGIN/../lib/shared' sbin/php-fpm
+
           # Tải php.ini-development gốc về
           wget -qO lib/php.ini "https://raw.githubusercontent.com/php/php-src/PHP-${{ github.event.inputs.php_version }}/php.ini-development"
-          
+
           # Nén toàn bộ kết quả đã được sắp xếp
           tar -czvf /tmp/php-${{ github.event.inputs.php_version }}-native-linux-x64.tar.gz .
 
