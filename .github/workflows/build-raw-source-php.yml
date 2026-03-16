@@ -30,6 +30,10 @@ jobs:
 
       - name: Install Build Systems & Dependencies
         run: |
+          sed -i -e 's/deb.debian.org/archive.debian.org/g' \
+                 -e 's|security.debian.org|archive.debian.org/|g' \
+                 -e '/stretch-updates/d' /etc/apt/sources.list
+          echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/10no--check-valid-until
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
             build-essential autoconf libtool bison re2c \
