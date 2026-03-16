@@ -19,7 +19,10 @@ jobs:
   build-raw-php:
     name: Compile Raw PHP ${{ github.event.inputs.php_version }} Source
     # Dùng ubuntu-20.04 (hoặc cũ hơn) để tương thích glibc với các HDH Linux khác
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    
+    container:
+      image: ubuntu:20.04
     
     steps:
       - name: Checkout Code
@@ -27,8 +30,8 @@ jobs:
 
       - name: Install Build Systems & Dependencies
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
             build-essential autoconf libtool bison re2c \
             pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev \
             libssl-dev libonig-dev libzip-dev libgd-dev libjpeg-dev \
