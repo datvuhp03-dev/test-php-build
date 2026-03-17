@@ -1,23 +1,27 @@
-name: DevStack Nginx Builder
+name: DevStack Build All Nginx Versions
 
 on:
   workflow_dispatch:
-    inputs:
-      nginx_version:
-        description: 'Nginx Version (e.g., 1.25.4)'
-        required: true
-        default: '1.25.4'
 
 permissions:
   contents: write
 
 jobs:
   build-nginx:
-    name: Compile Nginx ${{ github.event.inputs.nginx_version }}
+    name: Compile Nginx ${{ matrix.nginx_version }}
     runs-on: ubuntu-latest
     container:
       image: debian:10
-      
+    strategy:
+      fail-fast: false
+      matrix:
+        nginx_version:
+          - '1.20.2'
+          - '1.22.1'
+          - '1.24.0'
+          - '1.26.3'
+          - '1.27.4'
+          
     steps:
       - name: Install Build Systems & Dependencies
         run: |
@@ -31,12 +35,13 @@ jobs:
 
       - name: Download Nginx Source
         run: |
-          wget http://nginx.org/download/nginx-${{ github.event.inputs.nginx_version }}.tar.gz
-          tar -zxvf nginx-${{ github.event.inputs.nginx_version }}.tar.gz
+          wget http://nginx.org/download/nginx-${{ matrix.nginx_version }}.tar.gz
+          tar -zxvf nginx-${{ matrix.nginx_version }}.tar.gz
           
       - name: Configure and Compile Nginx
+        continue-on-error: true
         run: |
-          cd nginx-${{ github.event.inputs.nginx_version }}
+          cd nginx-${{ matrix.nginx_version }}
           ./configure \
             --prefix=/etc/nginx \
             --sbin-path=/usr/sbin/nginx \
@@ -52,18 +57,14 @@ jobs:
           make install DESTDIR=$(pwd)/output
           
       - name: Package Nginx
+        continue-on-error: true
         run: |
-          cd nginx-${{ github.event.inputs.nginx_version }}/output
-          tar -czvf /nginx-${{ github.event.inputs.nginx_version }}-native-linux-x64.tar.gz .
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: nginx-${{ github.event.inputs.nginx_version }}-linux
-          path: /nginx-${{ github.event.inputs.nginx_version }}-native-linux-x64.tar.gz
+          cd nginx-${{ matrix.nginx_version }}/output
+          tar -czvf /nginx-${{ matrix.nginx_version }}-native-linux-x64.tar.gz .
 
       - name: Release Build
+        continue-on-error: true
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: nginx-v${{ github.event.inputs.nginx_version }}
-          files: /nginx-${{ github.event.inputs.nginx_version }}-native-linux-x64.tar.gz
+          tag_name: nginx-v${{ matrix.nginx_version }}
+          files: /nginx-${{ matrix.nginx_version }}-native-linux-x64.tar.gz

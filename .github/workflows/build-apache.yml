@@ -1,23 +1,27 @@
-name: DevStack Apache Builder
+name: DevStack Build All Apache Versions
 
 on:
   workflow_dispatch:
-    inputs:
-      apache_version:
-        description: 'Apache HTTPD Version (e.g., 2.4.58)'
-        required: true
-        default: '2.4.58'
 
 permissions:
   contents: write
 
 jobs:
   build-apache:
-    name: Compile Apache ${{ github.event.inputs.apache_version }}
+    name: Compile Apache ${{ matrix.apache_version }}
     runs-on: ubuntu-latest
     container:
       image: debian:10
-      
+    strategy:
+      fail-fast: false
+      matrix:
+        apache_version:
+          - '2.4.54'
+          - '2.4.58'
+          - '2.4.61'
+          - '2.4.62'
+          - '2.4.63'
+          
     steps:
       - name: Install Build Systems & Dependencies
         run: |
@@ -31,12 +35,13 @@ jobs:
 
       - name: Download Apache Source
         run: |
-          wget https://archive.apache.org/dist/httpd/httpd-${{ github.event.inputs.apache_version }}.tar.gz
-          tar -zxvf httpd-${{ github.event.inputs.apache_version }}.tar.gz
+          wget https://archive.apache.org/dist/httpd/httpd-${{ matrix.apache_version }}.tar.gz
+          tar -zxvf httpd-${{ matrix.apache_version }}.tar.gz
           
       - name: Configure and Compile Apache
+        continue-on-error: true
         run: |
-          cd httpd-${{ github.event.inputs.apache_version }}
+          cd httpd-${{ matrix.apache_version }}
           ./configure \
             --prefix=/etc/apache2 \
             --enable-so \
@@ -49,18 +54,14 @@ jobs:
           make install DESTDIR=$(pwd)/output
           
       - name: Package Apache
+        continue-on-error: true
         run: |
-          cd httpd-${{ github.event.inputs.apache_version }}/output
-          tar -czvf /apache-${{ github.event.inputs.apache_version }}-native-linux-x64.tar.gz .
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: apache-${{ github.event.inputs.apache_version }}-linux
-          path: /apache-${{ github.event.inputs.apache_version }}-native-linux-x64.tar.gz
+          cd httpd-${{ matrix.apache_version }}/output
+          tar -czvf /apache-${{ matrix.apache_version }}-native-linux-x64.tar.gz .
 
       - name: Release Build
+        continue-on-error: true
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: apache-v${{ github.event.inputs.apache_version }}
-          files: /apache-${{ github.event.inputs.apache_version }}-native-linux-x64.tar.gz
+          tag_name: apache-v${{ matrix.apache_version }}
+          files: /apache-${{ matrix.apache_version }}-native-linux-x64.tar.gz
