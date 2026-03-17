@@ -47,6 +47,10 @@ jobs:
           mkdir -p /opt/openssl-1.0.2/lib/x86_64-linux-gnu
           ln -s /opt/openssl-1.0.2/lib/libssl.so /opt/openssl-1.0.2/lib/x86_64-linux-gnu/libssl.so
           ln -s /opt/openssl-1.0.2/lib/libcrypto.so /opt/openssl-1.0.2/lib/x86_64-linux-gnu/libcrypto.so
+          ln -s /usr/include/x86_64-linux-gnu/curl /usr/include/curl
+          echo '#!/bin/sh' > /usr/bin/freetype-config
+          echo 'pkg-config freetype2 "$@"' >> /usr/bin/freetype-config
+          chmod +x /usr/bin/freetype-config
           cd php-5.6.40
           export PKG_CONFIG_PATH=/opt/openssl-1.0.2/lib/pkgconfig:$PKG_CONFIG_PATH
           ./configure \
@@ -73,8 +77,8 @@ jobs:
             --with-pdo-mysql=mysqlnd \
             --with-pdo-sqlite \
             --with-gd \
-            --with-freetype-dir \
-            --with-jpeg-dir \
+            --with-freetype-dir=/usr \
+            --with-jpeg-dir=/usr \
             --with-mcrypt
           make -j$(nproc)
           make install INSTALL_ROOT=$(pwd)/install_dir
