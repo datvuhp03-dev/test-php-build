@@ -1,0 +1,89 @@
+name: DevStack Build All PHP Versions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-php:
+    name: Compile PHP ${{ matrix.php_version }}
+    runs-on: ubuntu-latest
+    container:
+      image: debian:10
+    strategy:
+      fail-fast: false
+      matrix:
+        php_version: 
+          - '5.6.40'
+          - '7.0.33'
+          - '7.1.33'
+          - '7.2.34'
+          - '7.3.33'
+          - '7.4.33'
+          - '8.0.30'
+          - '8.1.31'
+          - '8.2.27'
+          - '8.3.15'
+          - '8.4.2'
+          
+    steps:
+      - name: Install Build Systems & Dependencies
+        run: |
+          sed -i -e 's/deb.debian.org/archive.debian.org/g' \
+                 -e 's|security.debian.org|archive.debian.org/|g' \
+                 -e '/stretch-updates/d' /etc/apt/sources.list
+          echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/10no--check-valid-until
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential autoconf libtool bison re2c \
+            pkg-config libxml2-dev libsqlite3-dev libcurl4-openssl-dev \
+            libssl-dev libonig-dev libzip-dev libgd-dev libjpeg-dev \
+            libpng-dev libfreetype6-dev libwebp-dev libmcrypt-dev \
+            libreadline-dev libtidy-dev libxslt1-dev wget curl patchelf tar
+
+      - name: Download PHP Source from php.net
+        run: |
+          wget https://www.php.net/distributions/php-${{ matrix.php_version }}.tar.gz
+          tar -zxvf php-${{ matrix.php_version }}.tar.gz
+          
+      - name: Configure and Compile PHP
+        continue-on-error: true
+        run: |
+          cd php-${{ matrix.php_version }}
+          ./configure \
+            --prefix=/usr/local/php \
+            --with-config-file-path=/usr/local/php/etc \
+            --enable-fpm \
+            --with-fpm-user=www-data \
+            --with-fpm-group=www-data \
+            --with-mysqli \
+            --with-pdo-mysql \
+            --with-openssl \
+            --with-curl \
+            --with-zlib \
+            --enable-mbstring \
+            --enable-bcmath \
+            --enable-opcache \
+            --enable-sockets \
+            --enable-calendar \
+            --enable-exif \
+            --enable-gd \
+            --with-zip \
+            --disable-fileinfo
+          make -j$(nproc)
+          make install DESTDIR=$(pwd)/output
+          
+      - name: Package PHP
+        continue-on-error: true
+        run: |
+          cd php-${{ matrix.php_version }}/output/usr/local
+          tar -czvf /php-${{ matrix.php_version }}-native-linux-x64.tar.gz php/
+
+      - name: Release Build
+        continue-on-error: true
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: php-v${{ matrix.php_version }}
+          files: /php-${{ matrix.php_version }}-native-linux-x64.tar.gz
