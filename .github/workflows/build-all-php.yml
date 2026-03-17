@@ -28,7 +28,6 @@ jobs:
           - '8.3.17'
           - '8.4.4'
           - '8.5.4'
-          - '8.6.0'
           
     steps:
       - name: Install Build Systems & Dependencies
@@ -47,7 +46,7 @@ jobs:
 
       - name: Download PHP Source from php.net
         run: |
-          wget https://www.php.net/distributions/php-${{ matrix.php_version }}.tar.gz
+          wget https://www.php.net/distributions/php-${{ matrix.php_version }}.tar.gz || wget https://museum.php.net/php5/php-${{ matrix.php_version }}.tar.gz
           tar -zxvf php-${{ matrix.php_version }}.tar.gz
           
       - name: Configure and Compile PHP
@@ -55,37 +54,67 @@ jobs:
         run: |
           cd php-${{ matrix.php_version }}
           ./configure \
-            --prefix=/usr/local/php \
-            --with-config-file-path=/usr/local/php/etc \
+            --prefix=/opt/devstack/php \
             --enable-fpm \
             --with-fpm-user=www-data \
             --with-fpm-group=www-data \
-            --with-mysqli \
-            --with-pdo-mysql \
-            --with-openssl \
-            --with-curl \
-            --with-zlib \
-            --enable-mbstring \
             --enable-bcmath \
-            --enable-opcache \
-            --enable-sockets \
             --enable-calendar \
             --enable-exif \
-            --enable-gd \
+            --enable-ftp \
+            --enable-mbstring \
+            --enable-pcntl \
+            --enable-sockets \
+            --enable-soap \
+            --with-curl \
+            --with-openssl \
             --with-zip \
-            --disable-fileinfo
+            --with-zlib \
+            --with-mysqli=mysqlnd \
+            --with-pdo-mysql=mysqlnd \
+            --with-pdo-sqlite \
+            --enable-gd \
+            --with-freetype \
+            --with-jpeg \
+            --with-webp || ./configure --prefix=/opt/devstack/php --enable-fpm --with-mysqli --with-pdo-mysql --with-openssl --with-curl --with-zlib --enable-mbstring
           make -j$(nproc)
-          make install DESTDIR=$(pwd)/output
+          make install INSTALL_ROOT=$(pwd)/install_dir
           
       - name: Package PHP
+        shell: bash
         continue-on-error: true
         run: |
-          cd php-${{ matrix.php_version }}/output/usr/local
-          tar -czvf /php-${{ matrix.php_version }}-native-linux-x64.tar.gz php/
+          cd php-${{ matrix.php_version }}/install_dir/opt/devstack/php/
+
+          mkdir -p lib/shared
+          ldd bin/php sbin/php-fpm | grep "=> /" | awk '{print $3}' | sort -u | while read -r lib; do
+            if [[ "$lib" != *"/libc.so."* ]] && [[ "$lib" != *"/libdl.so."* ]] && [[ "$lib" != *"/libpthread.so."* ]] && [[ "$lib" != *"/libm.so."* ]] && [[ "$lib" != *"/ld-linux"* ]] && [[ "$lib" != *"/librt.so."* ]] && [[ "$lib" != *"/libgcc_s.so."* ]] && [[ "$lib" != *"/libresolv.so"* ]] && [[ "$lib" != *"/libnsl.so"* ]] && [[ "$lib" != *"/libutil.so"* ]]; then
+              cp "$lib" lib/shared/ || true
+            fi
+          done
+
+          patchelf --force-rpath --set-rpath '$ORIGIN/../lib/shared' bin/php || true
+          patchelf --force-rpath --set-rpath '$ORIGIN/../lib/shared' sbin/php-fpm || true
+
+          for so in lib/shared/*.so*; do
+            if [ -f "$so" ]; then
+              patchelf --force-rpath --set-rpath '$ORIGIN' "$so" || true
+            fi
+          done
+
+          wget -qO lib/php.ini "https://raw.githubusercontent.com/php/php-src/PHP-${{ matrix.php_version }}/php.ini-development" || true
+
+          tar -czvf /tmp/php-${{ matrix.php_version }}-native-linux-x64.tar.gz .
 
       - name: Release Build
         continue-on-error: true
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: php-v${{ matrix.php_version }}
-          files: /php-${{ matrix.php_version }}-native-linux-x64.tar.gz
+          name: DevStack Native PHP ${{ matrix.php_version }} (Linux x64)
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/php-${{ matrix.php_version }}-native-linux-x64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

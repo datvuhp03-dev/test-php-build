@@ -31,7 +31,7 @@ jobs:
           echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/10no--check-valid-until
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            build-essential wget curl libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev tar
+            build-essential wget curl libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev tar patchelf
 
       - name: Download Nginx Source
         run: |
@@ -57,14 +57,37 @@ jobs:
           make install DESTDIR=$(pwd)/output
           
       - name: Package Nginx
+        shell: bash
         continue-on-error: true
         run: |
-          cd nginx-${{ matrix.nginx_version }}/output
-          tar -czvf /nginx-${{ matrix.nginx_version }}-native-linux-x64.tar.gz .
+          cd nginx-${{ matrix.nginx_version }}/output/
+
+          mkdir -p usr/sbin/lib/shared
+          ldd usr/sbin/nginx | grep "=> /" | awk '{print $3}' | sort -u | while read -r lib; do
+            if [[ "$lib" != *"/libc.so."* ]] && [[ "$lib" != *"/libdl.so."* ]] && [[ "$lib" != *"/libpthread.so."* ]] && [[ "$lib" != *"/libm.so."* ]] && [[ "$lib" != *"/ld-linux"* ]] && [[ "$lib" != *"/librt.so."* ]] && [[ "$lib" != *"/libgcc_s.so."* ]] && [[ "$lib" != *"/libresolv.so"* ]] && [[ "$lib" != *"/libnsl.so"* ]] && [[ "$lib" != *"/libutil.so"* ]]; then
+              cp "$lib" usr/sbin/lib/shared/ || true
+            fi
+          done
+
+          patchelf --force-rpath --set-rpath '$ORIGIN/lib/shared' usr/sbin/nginx || true
+
+          for so in usr/sbin/lib/shared/*.so*; do
+            if [ -f "$so" ]; then
+              patchelf --force-rpath --set-rpath '$ORIGIN' "$so" || true
+            fi
+          done
+
+          tar -czvf /tmp/nginx-${{ matrix.nginx_version }}-native-linux-x64.tar.gz .
 
       - name: Release Build
         continue-on-error: true
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: nginx-v${{ matrix.nginx_version }}
-          files: /nginx-${{ matrix.nginx_version }}-native-linux-x64.tar.gz
+          name: DevStack Native Nginx ${{ matrix.nginx_version }} (Linux x64)
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/nginx-${{ matrix.nginx_version }}-native-linux-x64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

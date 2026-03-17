@@ -31,7 +31,7 @@ jobs:
           echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/10no--check-valid-until
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            build-essential wget curl libpcre3 libpcre3-dev libssl-dev libapr1-dev libaprutil1-dev tar
+            build-essential wget curl libpcre3 libpcre3-dev libssl-dev libapr1-dev libaprutil1-dev tar patchelf
 
       - name: Download Apache Source
         run: |
@@ -54,14 +54,37 @@ jobs:
           make install DESTDIR=$(pwd)/output
           
       - name: Package Apache
+        shell: bash
         continue-on-error: true
         run: |
-          cd httpd-${{ matrix.apache_version }}/output
-          tar -czvf /apache-${{ matrix.apache_version }}-native-linux-x64.tar.gz .
+          cd httpd-${{ matrix.apache_version }}/output/
+
+          mkdir -p etc/apache2/bin/lib/shared
+          ldd etc/apache2/bin/httpd | grep "=> /" | awk '{print $3}' | sort -u | while read -r lib; do
+            if [[ "$lib" != *"/libc.so."* ]] && [[ "$lib" != *"/libdl.so."* ]] && [[ "$lib" != *"/libpthread.so."* ]] && [[ "$lib" != *"/libm.so."* ]] && [[ "$lib" != *"/ld-linux"* ]] && [[ "$lib" != *"/librt.so."* ]] && [[ "$lib" != *"/libgcc_s.so."* ]] && [[ "$lib" != *"/libresolv.so"* ]] && [[ "$lib" != *"/libnsl.so"* ]] && [[ "$lib" != *"/libutil.so"* ]]; then
+              cp "$lib" etc/apache2/bin/lib/shared/ || true
+            fi
+          done
+
+          patchelf --force-rpath --set-rpath '$ORIGIN/lib/shared' etc/apache2/bin/httpd || true
+
+          for so in etc/apache2/bin/lib/shared/*.so*; do
+            if [ -f "$so" ]; then
+              patchelf --force-rpath --set-rpath '$ORIGIN' "$so" || true
+            fi
+          done
+
+          tar -czvf /tmp/apache-${{ matrix.apache_version }}-native-linux-x64.tar.gz .
 
       - name: Release Build
         continue-on-error: true
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: apache-v${{ matrix.apache_version }}
-          files: /apache-${{ matrix.apache_version }}-native-linux-x64.tar.gz
+          name: DevStack Native Apache ${{ matrix.apache_version }} (Linux x64)
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/apache-${{ matrix.apache_version }}-native-linux-x64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
