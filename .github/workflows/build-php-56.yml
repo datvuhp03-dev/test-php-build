@@ -87,6 +87,7 @@ jobs:
       - name: Package PHP 5.6
         shell: bash
         run: |
+          export LD_LIBRARY_PATH=/opt/openssl-1.0.2/lib:$LD_LIBRARY_PATH
           cd php-5.6.40/install_dir/opt/devstack/php/
 
           mkdir -p lib/shared
