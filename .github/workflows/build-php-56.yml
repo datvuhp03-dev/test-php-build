@@ -44,6 +44,9 @@ jobs:
           
       - name: Configure and Compile PHP 5.6
         run: |
+          mkdir -p /opt/openssl-1.0.2/lib/x86_64-linux-gnu
+          ln -s /opt/openssl-1.0.2/lib/libssl.so /opt/openssl-1.0.2/lib/x86_64-linux-gnu/libssl.so
+          ln -s /opt/openssl-1.0.2/lib/libcrypto.so /opt/openssl-1.0.2/lib/x86_64-linux-gnu/libcrypto.so
           cd php-5.6.40
           export PKG_CONFIG_PATH=/opt/openssl-1.0.2/lib/pkgconfig:$PKG_CONFIG_PATH
           ./configure \
@@ -61,6 +64,7 @@ jobs:
             --enable-soap \
             --with-curl=/usr \
             --with-libdir=lib/x86_64-linux-gnu \
+            --with-openssl-dir=/opt/openssl-1.0.2 \
             --with-openssl=/opt/openssl-1.0.2 \
             --enable-zip \
             --with-zlib \
