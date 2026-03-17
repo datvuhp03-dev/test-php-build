@@ -39,7 +39,7 @@ jobs:
           tar -zxvf httpd-${{ matrix.apache_version }}.tar.gz
           
       - name: Configure and Compile Apache
-        continue-on-error: true
+        
         run: |
           cd httpd-${{ matrix.apache_version }}
           ./configure \
@@ -55,7 +55,7 @@ jobs:
           
       - name: Package Apache
         shell: bash
-        continue-on-error: true
+        
         run: |
           cd httpd-${{ matrix.apache_version }}/output/
 
@@ -77,7 +77,7 @@ jobs:
           tar -czvf /tmp/apache-${{ matrix.apache_version }}-native-linux-x64.tar.gz .
 
       - name: Release Build
-        continue-on-error: true
+        
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apache-v${{ matrix.apache_version }}

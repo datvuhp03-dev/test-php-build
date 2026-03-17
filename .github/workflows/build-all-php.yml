@@ -50,7 +50,7 @@ jobs:
           tar -zxvf php-${{ matrix.php_version }}.tar.gz
           
       - name: Configure and Compile PHP
-        continue-on-error: true
+        
         run: |
           cd php-${{ matrix.php_version }}
           ./configure \
@@ -82,7 +82,7 @@ jobs:
           
       - name: Package PHP
         shell: bash
-        continue-on-error: true
+        
         run: |
           cd php-${{ matrix.php_version }}/install_dir/opt/devstack/php/
 
@@ -107,7 +107,7 @@ jobs:
           tar -czvf /tmp/php-${{ matrix.php_version }}-native-linux-x64.tar.gz .
 
       - name: Release Build
-        continue-on-error: true
+        
         uses: softprops/action-gh-release@v2
         with:
           tag_name: php-v${{ matrix.php_version }}
