@@ -79,7 +79,7 @@ jobs:
             --with-gd \
             --with-freetype-dir=/usr \
             --with-jpeg-dir=/usr \
-            --with-mcrypt
+            --with-mcrypt || { cat config.log; exit 1; }
           make -j$(nproc)
           make install INSTALL_ROOT=$(pwd)/install_dir
           
