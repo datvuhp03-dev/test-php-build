@@ -53,6 +53,7 @@ jobs:
           chmod +x /usr/bin/freetype-config
           cd php-5.6.40
           export PKG_CONFIG_PATH=/opt/openssl-1.0.2/lib/pkgconfig:$PKG_CONFIG_PATH
+          export LD_LIBRARY_PATH=/opt/openssl-1.0.2/lib:$LD_LIBRARY_PATH
           ./configure \
             --prefix=/opt/devstack/php \
             --enable-fpm \
