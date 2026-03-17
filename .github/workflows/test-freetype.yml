@@ -1,0 +1,13 @@
+﻿name: Test Freetype
+on: workflow_dispatch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: debian:10
+    steps:
+      - run: |
+          echo '#!/bin/sh' > /usr/bin/freetype-config
+          echo 'pkg-config freetype2 "$@"' >> /usr/bin/freetype-config
+          chmod +x /usr/bin/freetype-config
+          ls -l /usr/bin/freetype-config
+          cat /usr/bin/freetype-config
