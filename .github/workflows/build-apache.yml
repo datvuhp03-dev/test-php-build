@@ -1,0 +1,66 @@
+name: DevStack Apache Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      apache_version:
+        description: 'Apache HTTPD Version (e.g., 2.4.58)'
+        required: true
+        default: '2.4.58'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apache:
+    name: Compile Apache ${{ github.event.inputs.apache_version }}
+    runs-on: ubuntu-latest
+    container:
+      image: debian:10
+      
+    steps:
+      - name: Install Build Systems & Dependencies
+        run: |
+          sed -i -e 's/deb.debian.org/archive.debian.org/g' \
+                 -e 's|security.debian.org|archive.debian.org/|g' \
+                 -e '/stretch-updates/d' /etc/apt/sources.list
+          echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/10no--check-valid-until
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential wget curl libpcre3 libpcre3-dev libssl-dev libapr1-dev libaprutil1-dev tar
+
+      - name: Download Apache Source
+        run: |
+          wget https://archive.apache.org/dist/httpd/httpd-${{ github.event.inputs.apache_version }}.tar.gz
+          tar -zxvf httpd-${{ github.event.inputs.apache_version }}.tar.gz
+          
+      - name: Configure and Compile Apache
+        run: |
+          cd httpd-${{ github.event.inputs.apache_version }}
+          ./configure \
+            --prefix=/etc/apache2 \
+            --enable-so \
+            --enable-ssl \
+            --enable-cgi \
+            --enable-rewrite \
+            --with-z \
+            --with-pcre
+          make -j$(nproc)
+          make install DESTDIR=$(pwd)/output
+          
+      - name: Package Apache
+        run: |
+          cd httpd-${{ github.event.inputs.apache_version }}/output
+          tar -czvf /apache-${{ github.event.inputs.apache_version }}-native-linux-x64.tar.gz .
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-${{ github.event.inputs.apache_version }}-linux
+          path: /apache-${{ github.event.inputs.apache_version }}-native-linux-x64.tar.gz
+
+      - name: Release Build
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: apache-v${{ github.event.inputs.apache_version }}
+          files: /apache-${{ github.event.inputs.apache_version }}-native-linux-x64.tar.gz
