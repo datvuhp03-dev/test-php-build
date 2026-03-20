@@ -8,15 +8,32 @@ permissions:
 
 jobs:
   build-apache-macos:
-    name: Compile Apache ${{ matrix.apache_version }} for macOS
-    runs-on: macos-latest
+    name: Compile Apache ${{ matrix.apache_version }} for macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        apache_version:
-          - '2.4.62'
-          - '2.4.63'
-          - '2.4.66'
+        include:
+          # ARM64 (Apple Silicon)
+          - apache_version: '2.4.62'
+            arch: 'arm64'
+            runner: 'macos-latest'
+          - apache_version: '2.4.63'
+            arch: 'arm64'
+            runner: 'macos-latest'
+          - apache_version: '2.4.66'
+            arch: 'arm64'
+            runner: 'macos-latest'
+          # x86_64 (Intel)
+          - apache_version: '2.4.62'
+            arch: 'x86_64'
+            runner: 'macos-13'
+          - apache_version: '2.4.63'
+            arch: 'x86_64'
+            runner: 'macos-13'
+          - apache_version: '2.4.66'
+            arch: 'x86_64'
+            runner: 'macos-13'
 
     steps:
       - name: Install Build Dependencies
@@ -82,7 +99,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apache-v${{ matrix.apache_version }}-macos
-          name: LStack Native Apache ${{ matrix.apache_version }} (macOS $(uname -m))
+          name: LStack Native Apache ${{ matrix.apache_version }} (macOS)
           draft: false
           prerelease: false
           files: |

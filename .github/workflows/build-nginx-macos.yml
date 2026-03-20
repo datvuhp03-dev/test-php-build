@@ -8,15 +8,32 @@ permissions:
 
 jobs:
   build-nginx-macos:
-    name: Compile Nginx ${{ matrix.nginx_version }} for macOS
-    runs-on: macos-latest
+    name: Compile Nginx ${{ matrix.nginx_version }} for macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        nginx_version:
-          - '1.26.3'
-          - '1.27.4'
-          - '1.28.0'
+        include:
+          # ARM64 (Apple Silicon)
+          - nginx_version: '1.26.3'
+            arch: 'arm64'
+            runner: 'macos-latest'
+          - nginx_version: '1.27.4'
+            arch: 'arm64'
+            runner: 'macos-latest'
+          - nginx_version: '1.28.0'
+            arch: 'arm64'
+            runner: 'macos-latest'
+          # x86_64 (Intel)
+          - nginx_version: '1.26.3'
+            arch: 'x86_64'
+            runner: 'macos-13'
+          - nginx_version: '1.27.4'
+            arch: 'x86_64'
+            runner: 'macos-13'
+          - nginx_version: '1.28.0'
+            arch: 'x86_64'
+            runner: 'macos-13'
 
     steps:
       - name: Install Build Dependencies
@@ -82,7 +99,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nginx-v${{ matrix.nginx_version }}-macos
-          name: LStack Native Nginx ${{ matrix.nginx_version }} (macOS $(uname -m))
+          name: LStack Native Nginx ${{ matrix.nginx_version }} (macOS)
           draft: false
           prerelease: false
           files: |
