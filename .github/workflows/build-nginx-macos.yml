@@ -1,0 +1,91 @@
+name: Build Nginx for macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-nginx-macos:
+    name: Compile Nginx ${{ matrix.nginx_version }} for macOS
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        nginx_version:
+          - '1.26.3'
+          - '1.27.4'
+          - '1.28.0'
+
+    steps:
+      - name: Install Build Dependencies
+        run: |
+          brew install pcre openssl@3
+
+      - name: Download Nginx Source
+        run: |
+          wget http://nginx.org/download/nginx-${{ matrix.nginx_version }}.tar.gz
+          tar -zxvf nginx-${{ matrix.nginx_version }}.tar.gz
+
+      - name: Configure and Compile Nginx
+        run: |
+          cd nginx-${{ matrix.nginx_version }}
+          ./configure \
+            --prefix=/etc/nginx \
+            --sbin-path=/usr/local/bin/nginx \
+            --conf-path=/etc/nginx/nginx.conf \
+            --error-log-path=/var/log/nginx/error.log \
+            --http-log-path=/var/log/nginx/access.log \
+            --pid-path=/var/run/nginx.pid \
+            --lock-path=/var/run/nginx.lock \
+            --with-http_ssl_module \
+            --with-http_v2_module \
+            --with-http_realip_module \
+            --with-cc-opt="-I$(brew --prefix openssl@3)/include -I$(brew --prefix pcre)/include" \
+            --with-ld-opt="-L$(brew --prefix openssl@3)/lib -L$(brew --prefix pcre)/lib"
+          make -j$(sysctl -n hw.ncpu)
+          make install DESTDIR=$(pwd)/output
+
+      - name: Package Nginx with Dependencies
+        shell: bash
+        run: |
+          cd nginx-${{ matrix.nginx_version }}/output/
+
+          # Create lib directory for bundled dylibs
+          mkdir -p usr/local/bin/lib/shared
+
+          # Copy required dylibs (excluding system libraries)
+          otool -L usr/local/bin/nginx | grep -v '/usr/lib/' | grep -v '/System/' | awk '{print $1}' | grep '\.dylib' | while read -r lib; do
+            if [ -f "$lib" ]; then
+              cp "$lib" usr/local/bin/lib/shared/ || true
+            fi
+          done
+
+          # Fix install names to use @loader_path
+          install_name_tool -add_rpath '@loader_path/lib/shared' usr/local/bin/nginx || true
+
+          for dylib in usr/local/bin/lib/shared/*.dylib; do
+            if [ -f "$dylib" ]; then
+              # Change the dylib's own id
+              install_name_tool -id "@loader_path/$(basename $dylib)" "$dylib" || true
+              # Fix references in the main binary
+              install_name_tool -change "$(otool -L usr/local/bin/nginx | grep $(basename $dylib) | awk '{print $1}')" "@loader_path/lib/shared/$(basename $dylib)" usr/local/bin/nginx || true
+            fi
+          done
+
+          # Detect architecture
+          ARCH=$(uname -m)
+          tar -czvf /tmp/nginx-${{ matrix.nginx_version }}-native-darwin-${ARCH}.tar.gz .
+
+      - name: Release Build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nginx-v${{ matrix.nginx_version }}-macos
+          name: LStack Native Nginx ${{ matrix.nginx_version }} (macOS $(uname -m))
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/nginx-${{ matrix.nginx_version }}-native-darwin-*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

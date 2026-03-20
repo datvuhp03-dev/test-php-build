@@ -1,0 +1,91 @@
+name: Build Apache for macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apache-macos:
+    name: Compile Apache ${{ matrix.apache_version }} for macOS
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        apache_version:
+          - '2.4.62'
+          - '2.4.63'
+          - '2.4.66'
+
+    steps:
+      - name: Install Build Dependencies
+        run: |
+          brew install apr apr-util pcre openssl@3
+
+      - name: Download Apache Source
+        run: |
+          wget https://archive.apache.org/dist/httpd/httpd-${{ matrix.apache_version }}.tar.gz
+          tar -zxvf httpd-${{ matrix.apache_version }}.tar.gz
+
+      - name: Configure and Compile Apache
+        run: |
+          cd httpd-${{ matrix.apache_version }}
+          ./configure \
+            --prefix=/etc/apache2 \
+            --enable-so \
+            --enable-ssl \
+            --enable-cgi \
+            --enable-rewrite \
+            --enable-deflate \
+            --enable-headers \
+            --enable-expires \
+            --with-apr=$(brew --prefix apr) \
+            --with-apr-util=$(brew --prefix apr-util) \
+            --with-pcre=$(brew --prefix pcre) \
+            --with-ssl=$(brew --prefix openssl@3)
+          make -j$(sysctl -n hw.ncpu)
+          make install DESTDIR=$(pwd)/output
+
+      - name: Package Apache with Dependencies
+        shell: bash
+        run: |
+          cd httpd-${{ matrix.apache_version }}/output/
+
+          # Create lib directory for bundled dylibs
+          mkdir -p etc/apache2/bin/lib/shared
+
+          # Copy required dylibs (excluding system libraries)
+          otool -L etc/apache2/bin/httpd | grep -v '/usr/lib/' | grep -v '/System/' | awk '{print $1}' | grep '\.dylib' | while read -r lib; do
+            if [ -f "$lib" ]; then
+              cp "$lib" etc/apache2/bin/lib/shared/ || true
+            fi
+          done
+
+          # Fix install names to use @loader_path
+          install_name_tool -add_rpath '@loader_path/lib/shared' etc/apache2/bin/httpd || true
+
+          for dylib in etc/apache2/bin/lib/shared/*.dylib; do
+            if [ -f "$dylib" ]; then
+              # Change the dylib's own id
+              install_name_tool -id "@loader_path/$(basename $dylib)" "$dylib" || true
+              # Fix references in the main binary
+              install_name_tool -change "$(otool -L etc/apache2/bin/httpd | grep $(basename $dylib) | awk '{print $1}')" "@loader_path/lib/shared/$(basename $dylib)" etc/apache2/bin/httpd || true
+            fi
+          done
+
+          # Detect architecture
+          ARCH=$(uname -m)
+          tar -czvf /tmp/apache-${{ matrix.apache_version }}-native-darwin-${ARCH}.tar.gz .
+
+      - name: Release Build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apache-v${{ matrix.apache_version }}-macos
+          name: LStack Native Apache ${{ matrix.apache_version }} (macOS $(uname -m))
+          draft: false
+          prerelease: false
+          files: |
+            /tmp/apache-${{ matrix.apache_version }}-native-darwin-*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
