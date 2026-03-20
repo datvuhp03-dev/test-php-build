@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: Install Build Dependencies
         run: |
-          brew install apr apr-util pcre openssl@3
+          brew install apr apr-util pcre openssl@3 zlib
 
       - name: Download Apache Source
         run: |
@@ -60,7 +60,8 @@ jobs:
             --with-apr=$(brew --prefix apr) \
             --with-apr-util=$(brew --prefix apr-util) \
             --with-pcre=$(brew --prefix pcre) \
-            --with-ssl=$(brew --prefix openssl@3)
+            --with-ssl=$(brew --prefix openssl@3) \
+            --with-z=$(brew --prefix zlib)
           make -j$(sysctl -n hw.ncpu)
           make install DESTDIR=$(pwd)/output
 
