@@ -27,13 +27,13 @@ jobs:
           # x86_64 (Intel)
           - apache_version: '2.4.62'
             arch: 'x86_64'
-            runner: 'macos-13'
+            runner: 'macos-12'
           - apache_version: '2.4.63'
             arch: 'x86_64'
-            runner: 'macos-13'
+            runner: 'macos-12'
           - apache_version: '2.4.66'
             arch: 'x86_64'
-            runner: 'macos-13'
+            runner: 'macos-12'
 
     steps:
       - name: Install Build Dependencies

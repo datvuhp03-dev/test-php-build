@@ -27,13 +27,13 @@ jobs:
           # x86_64 (Intel)
           - nginx_version: '1.26.3'
             arch: 'x86_64'
-            runner: 'macos-13'
+            runner: 'macos-12'
           - nginx_version: '1.27.4'
             arch: 'x86_64'
-            runner: 'macos-13'
+            runner: 'macos-12'
           - nginx_version: '1.28.0'
             arch: 'x86_64'
-            runner: 'macos-13'
+            runner: 'macos-12'
 
     steps:
       - name: Install Build Dependencies
